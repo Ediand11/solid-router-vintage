@@ -136,30 +136,62 @@ export function scoreRoute(route: RouteDescription): number {
 }
 
 export function createMemoObject<T extends Record<string | symbol, unknown>>(fn: () => T): T {
-  const map = new Map();
+  const memos: Record<string | symbol, () => any> = {};
   const owner = getOwner()!;
-  return new Proxy(<T>{}, {
-    get(_, property) {
-      if (!map.has(property)) {
-        runWithOwner(owner, () =>
-          map.set(
-            property,
-            createMemo(() => fn()[property])
-          )
-        );
-      }
-      return map.get(property)();
-    },
-    getOwnPropertyDescriptor() {
-      return {
-        enumerable: true,
-        configurable: true
-      };
-    },
-    ownKeys() {
-      return Reflect.ownKeys(fn());
+  const result = {} as T;
+
+  const updateKeys = () => {
+    let obj: T;
+    try {
+      obj = fn();
+    } catch (e) {
+      return;
     }
-  });
+
+    const currentKeys = Object.getOwnPropertyNames(obj);
+
+    // Удаляем старые ключи, которых больше нет
+    for (const key in result) {
+      if (!currentKeys.includes(key)) {
+        delete result[key];
+      }
+    }
+
+    // Добавляем новые ключи
+    for (const key of currentKeys) {
+      if (!Object.prototype.hasOwnProperty.call(result, key)) {
+        const propKey = key;
+        runWithOwner(owner, () => {
+          const memo = createMemo(() => {
+            try {
+              const obj = fn();
+              return obj[propKey];
+            } catch (e) {
+              return undefined;
+            }
+          });
+          memos[propKey] = memo;
+
+          Object.defineProperty(result, propKey, {
+            enumerable: true,
+            configurable: true,
+            get: () => {
+              try {
+                return memos[propKey]();
+              } catch (e) {
+                return undefined;
+              }
+            }
+          });
+        });
+      }
+    }
+  };
+
+  // Создаем мемо для отслеживания изменений ключей
+  createMemo(updateKeys);
+
+  return result;
 }
 
 export function mergeSearchString(search: string, params: SetSearchParams) {

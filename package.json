@@ -1,5 +1,5 @@
 {
-  "name": "@solidjs/router",
+  "name": "@solidjs/router-vintage",
   "description": "Universal router for SolidJS",
   "author": "Ryan Carniato",
   "contributors": [
@@ -16,16 +16,14 @@
     "access": "public"
   },
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./src/index.tsx",
   "exports": {
     ".": {
-      "solid": "./dist/index.jsx",
-      "default": "./dist/index.js"
+			"default": "./src/index.tsx"
     }
   },
   "files": [
-    "dist"
+    "src"
   ],
   "sideEffects": false,
   "scripts": {

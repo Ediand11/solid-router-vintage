@@ -1,8 +1,8 @@
 /**
  * This is mock of the eventual Solid 2.0 primitive. It is not fully featured.
  */
-import { type Accessor, createResource, sharedConfig, type Setter, untrack } from "solid-js";
-import { createStore, reconcile, type ReconcileOptions, unwrap } from "solid-js/store";
+import { type Accessor, createResource, sharedConfig, type Setter, untrack, createSignal } from "solid-js";
+import { type ReconcileOptions, unwrap } from "solid-js/store";
 import { isServer } from "solid-js/web";
 
 /**
@@ -106,15 +106,22 @@ export function createAsyncStore<T>(
 }
 
 function createDeepSignal<T>(value: T | undefined, options?: ReconcileOptions) {
-  const [store, setStore] = createStore({
-    value: structuredClone(value)
-  });
+  const [signal, setSignal] = createSignal<T | null>(
+    value !== undefined ? structuredClone(value) : null
+  );
+
   return [
-    () => store.value,
-    (v: T) => {
-      typeof v === "function" && (v = v());
-      setStore("value", reconcile(structuredClone(v), options));
-      return store.value;
+    signal,
+    (v: T | ((prev: T | null) => T)) => {
+      const newVal = typeof v === "function"
+        ? (v as (prev: T | null) => T)(signal())
+        : v;
+
+      const newValue = structuredClone(newVal);
+
+      setSignal(() => newValue as T | null);
+
+      return newValue;
     }
   ] as [Accessor<T | null>, Setter<T | null>];
 }

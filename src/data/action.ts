@@ -32,16 +32,41 @@ export function useSubmissions<T extends Array<any>, U, V>(
   const subs = createMemo(() =>
     router.submissions[0]().filter(s => s.url === (fn as any).base && (!filter || filter(s.input)))
   );
-  return new Proxy<Submission<any, any>[] & { pending: boolean }>([] as any, {
-    get(_, property) {
-      if (property === $TRACK) return subs();
-      if (property === "pending") return subs().some(sub => !sub.result);
-      return subs()[property as any];
-    },
-    has(_, property) {
-      return property in subs();
+
+  const submissionsArray = [] as Submission<any, any>[];
+
+  Object.defineProperty(submissionsArray, $TRACK, {
+    enumerable: false,
+    configurable: true,
+    get() {
+      return subs();
     }
   });
+
+  Object.defineProperty(submissionsArray, "pending", {
+    enumerable: true,
+    configurable: true,
+    get() {
+      return subs().some(sub => !sub.result);
+    }
+  });
+
+  const originalGet = Array.prototype.valueOf;
+  submissionsArray.valueOf = function() {
+    const currentSubs = subs();
+
+    while (submissionsArray.length > 0) {
+      submissionsArray.pop();
+    }
+
+    currentSubs.forEach((sub, index) => {
+      submissionsArray[index] = sub;
+    });
+
+    return originalGet.call(this);
+  };
+
+  return submissionsArray as Submission<any, any>[] & { pending: boolean };
 }
 
 export function useSubmission<T extends Array<any>, U, V>(
@@ -49,16 +74,28 @@ export function useSubmission<T extends Array<any>, U, V>(
   filter?: (input: V) => boolean
 ): Submission<T, NarrowResponse<U>> | SubmissionStub {
   const submissions = useSubmissions(fn, filter);
-  return new Proxy(
-    {},
-    {
-      get(_, property) {
-        if ((submissions.length === 0 && property === "clear") || property === "retry")
+  const result = {} as Submission<T, NarrowResponse<U>>;
+
+  const submissionProperties = [
+    "input", "result", "error", "pending", "url", "clear", "retry"
+  ] as const;
+
+  submissionProperties.forEach(prop => {
+    Object.defineProperty(result, prop, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        if ((submissions.length === 0 && prop === "clear") || prop === "retry") {
           return () => {};
-        return submissions[submissions.length - 1]?.[property as keyof Submission<T, U>];
+        }
+
+        const latestSubmission = submissions[submissions.length - 1];
+        return latestSubmission ? latestSubmission[prop] : undefined;
       }
-    }
-  ) as Submission<T, NarrowResponse<U>>;
+    });
+  });
+
+  return result;
 }
 
 export function useAction<T extends Array<any>, U, V>(action: Action<T, U, V>) {
